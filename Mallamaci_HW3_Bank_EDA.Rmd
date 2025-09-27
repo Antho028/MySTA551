@@ -1,0 +1,289 @@
+---
+title: "Factors of Term Deposit Subscription: An Exploratory Data Analysis of Portuguese Bank Marketing Campaigns"
+author: "Anthony Mallamaci"
+date: "2025-09-24"
+output:
+  html_document: default
+  word_document: default
+---
+
+Data Description — Portuguese Bank Telemarketing Dataset
+
+Data source (brief):
+
+The dataset originates from a Portuguese banking institution and is publicly available for research. It contains information collected during direct telemarketing campaigns aimed at selling term deposits.
+
+Objective Statement & Background:
+
+This project uses the Portuguese Bank Telemarketing dataset, which contains client-level data collected during phone-based marketing campaigns conducted between May 2008 and November 2010. The primary objective of this exploratory data analysis (EDA) is to identify key factors that influence whether a client subscribes to a term deposit. The dataset includes demographic information (age, job, marital status, education), financial attributes (balance, housing loan, personal loan), and campaign-related details (contact method, duration, previous outcomes). Understanding these relationships provides a foundation for developing more effective marketing strategies.
+
+Variable list and definitions:
+Bank client data:
+
+1.	age (numeric) — Age of the client (in years).
+
+2.	job (categorical) — Type of job (e.g., admin., unemployed, management, technician, etc.).
+
+3.	marital (categorical) — Marital status (married, divorced/widowed, single).
+
+4.	education (categorical) — Education level (primary, secondary, tertiary, unknown).
+
+5.	default (binary categorical) — Does the client have credit in default? (yes, no).
+
+6.	balance (numeric) — Average yearly balance of the client’s account (in euros).
+
+7.	housing (binary categorical) — Has a housing loan? (yes, no).
+
+8.	loan (binary categorical) — Has a personal loan? (yes, no).
+
+Last contact of current campaign:
+
+9. contact (categorical) — Communication type (telephone, cellular, unknown).
+
+10. day (categorical) — Day of the month of last contact.
+
+11. month (categorical) — Month of last contact (jan–dec).
+
+12. duration (numeric) — Duration of last contact in seconds
+
+13. campaign (numeric) — Number of contacts performed during this campaign for the client (includes last contact).
+
+14. pdays (numeric) — Days since client was last contacted in a previous campaign (-1 means not previously contacted).
+
+15. previous (numeric) — Number of contacts performed before this campaign for this client.
+
+16. poutcome (categorical) — Outcome of the previous marketing campaign (success, failure, other, unknown).
+
+Target variable:
+
+17. y (binary categorical) — Has the client subscribed to a term deposit? (yes, no).
+
+
+```{r setup, include=FALSE}
+# code chunk specifies whether the R code, warnings, and output 
+# will be included in the output files.
+if (!require("knitr")) {
+   install.packages("knitr")
+   library(knitr)
+}
+if (!require("MASS")) {
+   install.packages("MASS")
+   library(MASS)
+}
+if (!require("leaflet")) {
+   install.packages("leaflet")
+   library(leaflet)
+}
+if (!require("factoextra")) {
+   install.packages("factoextra")
+   library(factoextra)
+}
+if (!require("TSstudio")) {
+   install.packages("TSstudio")
+   library(TSstudio)
+}
+if (!require("plotrix")) {
+   install.packages("plotrix")
+library(plotrix)
+}
+if (!require("ggridges")) {
+   install.packages("ggridges")
+library(ggridges)
+}
+if (!require("tidyverse")) {
+   install.packages("tidyverse")
+library(tidyverse)
+}
+if (!require("GGally")) {
+   install.packages("GGally")
+library(GGally)
+}
+knitr::opts_chunk$set(echo = TRUE,   
+                      warning = FALSE,  
+                      result = TRUE,    
+                      message = FALSE,
+                      comment = NA
+                      )  
+
+# EDA for Portuguese Bank Telemarketing Dataset
+
+# Read in dataset 
+bank = read_csv("Bank.Test.csv")
+
+head(bank, 50)
+
+# Descriptive Statistics 
+summary(bank)
+
+
+
+# indiviual plots for each variable
+library(ggplot2)
+library(dplyr)
+library(readr)
+
+
+```
+
+From this output I learned that there are no missing data vales. However data vales are classified as unknown. I also learned that the variable balance is heavily skewed to the right. 
+
+
+```{r, echo= FALSE}
+
+bank = read_csv("Bank.Test.csv")
+
+head(bank)
+
+# Descriptive Statistics 
+summary(bank)
+
+
+# indiviual plots for each variable
+library(ggplot2)
+library(dplyr)
+library(readr)
+
+
+
+```
+
+
+Does the age of the client(in years) correlate with whether they subscribe to to a term deposit?
+
+```{r, echo= FALSE}
+
+bank = read_csv("Bank.Test.csv")
+
+# Plots of two or more variables 
+#Age & y
+# run once if not installed
+library(ggridges)
+
+#Include 
+ggplot(bank, aes(x=age,y=y,fill=y))+
+  geom_density_ridges_gradient(scale = 4) + theme_ridges() +
+  scale_y_discrete(expand = c(0.01, 0)) +
+  scale_x_continuous(expand = c(0.08, 0)) +
+  labs(x = "age",y = "y") +
+  ggtitle("Density estimation of age given if the Client Subscribed") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+The goal of this graph was to determine if there might be a correlation between age and whether a person subscribes to a term deposit. Based on the graph I see that a larger proportion of the yes graph(green graph) came from older clients (ages: 70-80) compared to the graph of clients who did not subscribe (red graph). 
+
+
+Does call duration(seconds) influence whether the client subscribes to to a term deposit?
+
+```{r, echo= FALSE}
+
+bank = read_csv("Bank.Test.csv")
+
+# Duration & y
+#Include
+ggplot(bank, aes(x=duration,y=y,fill=y))+
+  geom_density_ridges_gradient(scale = 4) + theme_ridges() +
+  scale_y_discrete(expand = c(0.01, 0)) +
+  scale_x_continuous(expand = c(0.08, 0)) +
+  labs(x = "Duration(Seconds)",y = "y", fill = "Subscription") +
+  ggtitle("Density estimation of Duration given y") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+```
+
+The analysis of call duration shows a clear relationship between the length of contact and the likelihood of subscription. Clients who ultimately subscribed tended to have much longer calls compared to those who did not, whose call times clustered heavily near the lower end of the scale. This suggests that longer conversations provide more opportunity to build trust and explain the product, increasing the chance of a positive outcome.
+
+
+Does the job type of the client effect whether they whether they subscribe to to a term deposit?
+
+```{r, echo= FALSE}
+
+bank = read_csv("Bank.Test.csv")
+
+#Job and y 
+#Include
+ggplot(bank, aes(x = job, fill = y)) +
+  geom_bar(position = "fill") +
+  labs(x = "Job Type", y = "Proportion", title = "Proportion of Subscription by Job", fill = "Subscription") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),  # vertical labels
+    axis.title.x = element_text(margin = margin(t = 15))             # push down x-axis title
+  )
+
+```
+
+This graph examines the relationship between job type and the likelihood of subscribing to a term deposit. While the majority of clients across all occupations did not subscribe, some categories stand out as relatively more receptive. Retired individuals and students show the highest subscription proportions, suggesting that financial security in retirement and early-stage financial planning among students may drive interest. In contrast, blue-collar workers, self-employed clients, and those in services exhibit lower subscription rates, which could reflect differing financial priorities or levels of disposable income.
+
+
+Does the day of the month of last contact with the client effect whether they subscribe to to a term deposit?
+
+```{r, echo= FALSE}
+
+bank = read_csv("Bank.Test.csv")
+
+# Day and y 
+#Maybe 
+ggplot(bank, aes(x = day, fill = y)) +
+  geom_bar(position = "fill") +
+  labs(x = "Day of the Month", y = "Proportion", title = "Proportion of the Day of the month related to y", fill = "subscription") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),  # vertical labels
+    axis.title.x = element_text(margin = margin(t = 15))             # push down x-axis title
+  )
+
+
+```
+
+This graph explores whether the day of the month influences the likelihood of a client subscribing to a term deposit. While overall subscription rates remain relatively low throughout the month, some variation can be observed. There are noticeable peaks in the proportion of subscriptions around the beginning(day 1) and middle(day 10) of the month, with smaller increases scattered later on. This could reflect practical timing factors such as payday cycles, bill payments, or when clients are more financially prepared to consider new commitments.
+
+
+Does the month of last contact with the client effect whether they subscribe to to a term deposit?
+
+```{r, echo= FALSE}
+
+bank = read_csv("Bank.Test.csv")
+
+# Month and y 
+#Include
+ggplot(bank, aes(x = month, fill = y)) +
+  geom_bar(position = "fill") +
+  labs(x = "Month", y = "Proportion", title = "Proportion of the month related to y", fill = "subscription") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),  # vertical labels
+    axis.title.x = element_text(margin = margin(t = 15))             # push down x-axis title
+  )
+
+```
+
+This stacked bar chart shows the proportion of responses for variable y (“yes” vs. “no”) across each month. The “no” category (red) dominates most months, indicating that “yes” is generally less frequent overall. However, there are noticeable peaks for “yes” (green) in specific months, such as December, March, October, and September, where the proportion rises closer to half of the total responses for those months.
+
+
+Does the outcome of the previous campaign effect whether they subscribe to to a term deposit?
+
+```{r, echo= FALSE}
+
+bank = read_csv("Bank.Test.csv")
+
+#Poutcome and y 
+#Include
+ggplot(bank, aes(x = poutcome, fill = y)) +
+  geom_bar(position = "fill") +
+  labs(x = "Outcome of the previous marketing campaign ", y = "Proportion", title = "Proportion of the result of the previous campaign related to y", fill = "subscription") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),  # vertical labels
+    axis.title.x = element_text(margin = margin(t = 15))             # push down x-axis title
+  )
+
+
+```
+
+This graph explores whether the outcome of the previous marketing campaigns influences the likelihood of a client subscribing to a term deposit. Based on this graph if the previous marketing campaign was successful the odds of the client subscribing to a term deposit doesnt just go up but becomes likely at roughly 65-70%. 
+
+
+
+Conclusion:
+
+This exploratory data analysis revealed several key patterns in the Portuguese Bank Telemarketing dataset. Age, job type, call duration, and outcomes of previous campaigns all showed meaningful relationships with whether clients subscribed to a term deposit, while "timing" variables such as month and day also suggested potential influence. These findings highlight both demographic and campaign-related factors that shape subscription behavior. As a next step, statistical testing such as logistic regression or Chi-Squared tests should be conducted to validate these relationships and quantify their impact. This will provide stronger evidence for which factors most reliably predict client subscriptions and help guide more effective marketing strategies.
+
