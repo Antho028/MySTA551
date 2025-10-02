@@ -1,0 +1,137 @@
+---
+title: "Mallamaci HW4 Bank Feature Engineering"
+author: "Anthony Mallamaci"
+date: "2025-10-02"
+output: html_document
+---
+
+Discretization regarding the age variable. I will use equal width binning where the continuous variable age will be split into 5 equally spaced bins.
+
+```{r, echo=TRUE}
+url <- "https://raw.githubusercontent.com/Antho028/MySTA551/refs/heads/main/Bank.Test.csv"
+mydata <- read.csv(url)
+#head(mydata)
+
+mydata_binned <- mydata
+mydata_binned$bin <- cut(
+  mydata_binned$age,
+  breaks = 5,
+  labels = c("19-32", "33-46", "47-60", "61-74", "75-87")
+)
+#print(mydata_binned)
+
+```
+
+
+Variable encoding 
+
+```{r, echo=TRUE}
+url <- "https://raw.githubusercontent.com/Antho028/MySTA551/refs/heads/main/Bank.Test.csv"
+mydata <- read.csv(url)
+# head(mydata)
+
+# Education level Varaible 
+mydata$education <- factor(
+  mydata$education,
+  levels = c("unknown", "primary", "secondary", "tertiary"),
+  ordered = TRUE
+)
+
+mydata$education_code <- as.numeric(mydata$education)
+
+#head(mydata[, c("education", "education_code")])
+
+
+
+# job variable
+#install.packages("fastDummies")
+
+# Load the package every time you start a new R session
+library(fastDummies)
+
+mydata <- fastDummies::dummy_cols(
+  mydata,
+  select_columns = "job",
+  remove_first_dummy = FALSE   
+)
+
+# Check the new dummy columns
+#head(mydata[, grep("^job_", names(mydata))])
+
+
+# Variable contact 
+mydata$contact <- trimws(tolower(mydata$contact))
+#unique(mydata$contact)
+
+
+mydata <- fastDummies::dummy_cols(
+  mydata,
+  select_columns = "contact",
+  remove_first_dummy = FALSE   
+)
+
+#print(mydata[, grep("^contact_", names(mydata))])
+
+
+# poutcome 
+
+mydata <- fastDummies::dummy_cols(
+  mydata,
+  select_columns = "poutcome",
+  remove_first_dummy = FALSE   
+)
+
+#print(mydata[, grep("^poutcome_", names(mydata))])
+
+
+
+```
+
+
+Transforming the balance variable to fix right skew. 
+
+```{r, echo=TRUE}
+library(MASS)
+
+# Shift the variable so all values are positive
+mydata$balance_shifted <- mydata$balance + 3314
+
+# Fit a simple linear model 
+bc_model <- lm(balance_shifted ~ 1, data = mydata)
+any(mydata$balance_shifted < 0)
+# Perform Box-Cox transformation to find optimal lambda
+bc_result <- boxcox(bc_model, lambda = seq(-2, 2, by = 0.1))
+
+# Extract the lambda with the maximum log-likelihood
+lambda_opt <- bc_result$x[which.max(bc_result$y)]
+cat("Optimal lambda:", lambda_opt, "\n")
+
+# Apply the Box-Cox transformation using the optimal lambda
+if (lambda_opt == 0) {
+  mydata$balance_boxcox <- log(mydata$balance_shifted)
+} else {
+  mydata$balance_boxcox <- (mydata$balance_shifted^lambda_opt - 1) / lambda_opt
+}
+
+# Check the transformed variable
+summary(mydata$balance_boxcox)
+ 
+
+mydata$balance_log <- log(mydata$balance_shifted)
+
+# Quick check: look at the distribution
+hist(mydata$balance_log,
+     main = "Histogram of Log-Transformed Balance",
+     xlab = "log(balance_shifted)",
+     breaks = 50,
+     col = "skyblue")
+
+qqnorm(mydata$balance_log)
+qqline(mydata$balance_log, col = "red")
+
+# Shapiro–Wilk normality test 
+shapiro.test(sample(mydata$balance_log, min(5000, nrow(mydata))))
+
+```
+
+Using Box Cox to transform the balance variable didn't completely fix the problem but looking at the histogram it did make the balance variable closer to being normal. 
