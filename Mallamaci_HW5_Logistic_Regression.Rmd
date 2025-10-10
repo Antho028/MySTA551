@@ -1,0 +1,130 @@
+---
+title: "Factors that Associate with Clients Subscribing to Term Deposit"
+author: "Anthony Mallamaci"
+date: "2025-10-10"
+output: html_document
+---
+
+<h1 style="color:black;">Question and Purpose</h1>
+
+<p>This analysis examines factors influencing a client’s subscription to a term deposit (y) for both association and predictive purposes. The goal is to identify which client and campaign features are associated with subscription probability and to build a predictive model for new clients.</p>
+
+<h2 style="color:black;">Data Sufficiency</h2>
+
+<p>The dataset contains over 40,000 observations with demographic, financial, and campaign information, providing adequate detail for logistic regression analysis.</p>
+
+<h2 style="color:black;">Model Building</h2>
+
+<p>The purpose of building the logistic regression model is to identify which client and campaign characteristics influence the likelihood of subscribing to a term deposit. By examining significant predictors, the model provides insights into the associations between features and the response variable and allows for reliable predictions for new clients. Ultimately, this analysis aims to guide targeted marketing strategies and improve campaign effectiveness.</p>
+
+```{r setup, include=FALSE, echo=FALSE, warning=FALSE}
+url <- "https://raw.githubusercontent.com/Antho028/MySTA551/refs/heads/main/Bank.Test.csv"
+mydata <- read.csv(url)
+
+# Variable encoding (y variable)
+mydata$y <- ifelse(mydata$y == "yes", 1, 0)
+
+# Convert categorical variables to factors
+mydata$job        <- as.factor(mydata$job)
+mydata$marital    <- as.factor(mydata$marital)
+mydata$education  <- as.factor(mydata$education)
+mydata$housing    <- as.factor(mydata$housing)
+mydata$contact    <- as.factor(mydata$contact)
+mydata$month      <- as.factor(mydata$month)
+mydata$poutcome   <- as.factor(mydata$poutcome)
+
+# Logistic full model
+library(knitr)
+library(kableExtra)
+library(car)
+library(corrplot)
+
+initial.model <- glm(y ~ age + job + marital + education + default + balance + housing + loan + contact + day + month + duration + campaign + pdays + previous + poutcome,
+                     family = binomial,
+                     data = mydata)
+
+coefficient.table <- summary(initial.model)$coef
+
+# Display coefficient table
+kable(coefficient.table, caption = "Significance tests of logistic regression model") %>%
+  kable_styling(full_width = FALSE, font_size = 14) %>%
+  row_spec(0, color = "white", background = "#222222") %>%
+  row_spec(1:nrow(coefficient.table), color = "white", background = "#333333")
+
+# ANOVA for overall significance
+#Anova(initial.model, type = "III")
+
+```
+
+
+```{r a, include=TRUE, echo=FALSE, warning=FALSE}
+# VIF check
+vif_values <- vif(initial.model)
+print(vif_values)
+
+# Correlation check for numeric variables
+numeric_vars <- sapply(mydata, is.numeric)
+numeric_data <- mydata[, numeric_vars]
+cor_matrix <- cor(numeric_data, use = "complete.obs")
+print(round(cor_matrix, 2))
+corrplot(cor_matrix, method = "color", tl.cex = 0.8, number.cex = 0.7)
+
+```
+
+<p> None of the numeric variables have a high correlation (>|0.8|) between each. This means we should not have an issue with multicollinearity.</p>
+
+<h2 style="color:black;">Reduced Model</h2> 
+<p>The reduced model was created to simplify the initial logistic regression by retaining only the most influential predictors. Starting with a full model that included all demographic, financial, and campaign variables, backward stepwise selection based on AIC was applied to remove variables that contributed little to explaining subscription probability. This process resulted in a more parsimonious model that balances predictive accuracy with interpretability, highlighting the variables that have the strongest association with whether or not a client subscribes to the term deposit. </p>
+
+```{r rud, include=TRUE, echo=FALSE, warning=FALSE}
+# Reduced model via backward stepwise selection
+full.model <- initial.model
+reduced.model <- glm(y ~ poutcome, family = binomial, data = mydata)
+final.model <- step(full.model, 
+                    scope=list(lower=formula(reduced.model), upper=formula(full.model)),
+                    data = mydata, 
+                    direction = "backward",
+                    trace = 0)
+final.model.coef <- summary(final.model)$coef
+
+# Display final model coefficients
+kable(final.model.coef, caption = "Summary table of significant tests") %>%
+  kable_styling("striped", full_width = FALSE) %>%
+  row_spec(0, color = "white", background = "#222222") %>%
+  row_spec(1:nrow(final.model.coef), color = "white", background = "#333333")
+
+```
+
+<h2 style="color:black;">Association Analysis Interpretation</h2> <p>Clients with tertiary education, longer call durations, and those contacted in March or October are more likely to subscribe. Individuals with a previously successful campaign outcome are also positively associated with subscription. Conversely, being married, having a housing or personal loan, using an unknown contact method, or being contacted repeatedly during the same campaign lowers subscription odds. Early-year contacts tend to have negative effects. Call duration and prior campaign success exhibit the strongest influence on subscription.</p> <h2 style="color:black;">Predictive Model</h2> <p>The predictive model uses logistic regression to estimate whether a client will subscribe to a term deposit using demographic, financial, and campaign variables.</p>
+
+```{r p, include=TRUE, echo=FALSE, warning=FALSE}
+# Predict subscription probability for new clients
+mynewdata <- data.frame(
+  marital   = c("single", "married"),
+  education = c("tertiary", "secondary"),
+  balance   = c(1200, 300),
+  housing   = c("no", "yes"),
+  loan      = c("no", "no"),
+  contact   = c("cellular", "unknown"),
+  day       = c(15, 23),
+  month     = c("mar", "oct"),
+  duration  = c(250, 120),
+  campaign  = c(1, 4),
+  poutcome  = c("success", "failure")
+)
+
+pred.success.prob <- predict(final.model, newdata = mynewdata, type = "response")
+cut.off.prob <- 0.5
+pred.response <- ifelse(pred.success.prob > cut.off.prob, 1, 0)
+mynewdata$Predicted_Response <- pred.response
+
+# Display predictions neatly with white header
+kable(mynewdata, caption = "Predicted Probability and Response (cut-off = 0.5)") %>%
+  kable_styling(full_width = FALSE) %>%
+  row_spec(0, color = "white")
+
+```
+
+<p> The predictive model estimates whether a client will subscribe to a term deposit based on their characteristics. For the two hypothetical clients, it predicts that the single client with tertiary education and favorable campaign features will subscribe (1), while the married client with less favorable features will not (0). </p>
+
+<h2 style="color:black;">Summary</h2> <p>This analysis examined factors influencing whether a client subscribes to a term deposit. Logistic regression identified significant positive associations with tertiary education, longer call duration, contacts in March or October, and previously successful campaigns. Inversely, being married, having loans, unknown contact methods, repeated campaigns, and early-year contacts were negatively associated. A reduced model was built using backward selection to focus on the strongest predictors, ensuring model simplicity and interpretability. The predictive model demonstrates how new client features can estimate subscription probability, providing actionable insights for marketing strategies.</p> 
