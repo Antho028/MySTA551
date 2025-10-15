@@ -1,0 +1,575 @@
+---
+title: "Factors Influencing Term Deposit Subscription"
+author: "Anthony Mallamaci"
+date: "2025-10-14"
+output: html_document
+---
+
+
+<h1 style="color:black;">Question and Purpose</h1>
+
+<p>This analysis examines factors influencing a client’s subscription to a term deposit (y) for both association and predictive purposes. The goal is to identify which client and campaign features are associated with subscription probability and to build a predictive model for new clients.</p>
+
+<h2 style="color:black;">Data Sufficiency</h2>
+
+<p> The dataset originates from a Portuguese banking institution and is publicly available for research. It contains information collected during direct telemarketing campaigns aimed at selling term deposits. It contains over 40,000 observations with demographic, financial, and campaign information, providing adequate detail for logistic regression analysis. 
+
+Variable list and definitions:
+
+1.	age (numeric) — Age of the client (in years).
+
+2.	job (categorical) — Type of job (e.g., admin., unemployed, management, technician, etc.).
+
+3.	marital (categorical) — Marital status (married, divorced/widowed, single).
+
+4.	education (categorical) — Education level (primary, secondary, tertiary, unknown).
+
+5.	default (binary categorical) — Does the client have credit in default? (yes, no).
+
+6.	balance (numeric) — Average yearly balance of the client’s account (in euros).
+
+7.	housing (binary categorical) — Has a housing loan? (yes, no).
+
+8.	loan (binary categorical) — Has a personal loan? (yes, no).
+
+Last contact of current campaign:
+
+9. contact (categorical) — Communication type (telephone, cellular, unknown).
+
+10. day (categorical) — Day of the month of last contact.
+
+11. month (categorical) — Month of last contact (jan–dec).
+
+12. duration (numeric) — Duration of last contact in seconds
+
+13. campaign (numeric) — Number of contacts performed during this campaign for the client (includes last contact).
+
+14. pdays (numeric) — Days since client was last contacted in a previous campaign (-1 means not previously contacted).
+
+15. previous (numeric) — Number of contacts performed before this campaign for this client.
+
+16. poutcome (categorical) — Outcome of the previous marketing campaign (success, failure, other, unknown).
+
+Target variable:
+
+17. y (binary categorical) — Has the client subscribed to a term deposit? (yes, no).
+
+</p>
+
+<h2 style="color:black;">Model Building</h2>
+<h3 style="color:black;">Association Analysis</h3>
+<p>The purpose of building the logistic regression model is to identify which client and campaign characteristics influence the likelihood of subscribing to a term deposit. By examining significant predictors, the model provides insights into the associations between features and the response variable and allows for reliable predictions for new clients. Ultimately, this analysis aims to guide targeted marketing strategies and improve campaign effectiveness.</p>
+
+
+```{r o setup, include=FALSE}
+# Read in dataset 
+url <- "https://raw.githubusercontent.com/Antho028/MySTA551/refs/heads/main/Bank.Test.csv"
+mydata <- read.csv(url)
+head(mydata)
+
+
+# Variable encoding (y variable)
+mydata$y <- ifelse(mydata$y == "yes", 1, 0)
+
+# Convert categorical variables to factors
+mydata$job        <- as.factor(mydata$job)
+mydata$marital    <- as.factor(mydata$marital)
+mydata$default    <- as.factor(mydata$default)
+mydata$loan       <- as.factor(mydata$loan)
+mydata$housing    <- as.factor(mydata$housing)
+mydata$education  <- as.factor(mydata$education)
+mydata$contact    <- as.factor(mydata$contact)
+mydata$month      <- as.factor(mydata$month)
+mydata$poutcome   <- as.factor(mydata$poutcome)
+
+
+```
+
+<h3 style="color:black;">Variable Encoding</h3>
+
+<p>Before I could continue with Logistic regression and cross validation I needed to make sure my variables were suitable for such models. First for variable y I encoded it to be 1 and 0 in replace of "Yes" and "no" respectively. Next for the remaining character variables I converted them to factors.</p>
+
+```{r setup, include=FALSE}
+# Logistic full model
+library(knitr)
+library(kableExtra)
+library(car)
+library(corrplot)
+
+initial.model <- glm(y ~ age + job + marital + education + default + balance + housing + loan + contact + day + month + duration + campaign + pdays + previous + poutcome,
+                     family = binomial,
+                     data = mydata)
+
+coefficient.table <- summary(initial.model)$coef
+
+# Display coefficient table
+kable(coefficient.table, caption = "Significance tests of logistic regression model") %>%
+  kable_styling(full_width = FALSE, font_size = 14) %>%
+  row_spec(0, color = "white", background = "#222222") %>%
+  row_spec(1:nrow(coefficient.table), color = "white", background = "#333333")
+
+# ANOVA for overall significance
+#Anova(initial.model, type = "III")
+
+```
+
+<h4 style="color:black;">Assumptions</h4>
+```{r a, include=TRUE, echo=FALSE, warning=FALSE}
+# VIF check
+vif_values <- vif(initial.model)
+print(vif_values)
+
+# Correlation check for numeric variables
+numeric_vars <- sapply(mydata, is.numeric)
+numeric_data <- mydata[, numeric_vars]
+cor_matrix <- cor(numeric_data, use = "complete.obs")
+print(round(cor_matrix, 2))
+corrplot(cor_matrix, method = "color", tl.cex = 0.8, number.cex = 0.7)
+
+
+
+```
+<p> None of the numeric variables have a high correlation (>|0.8|) between each. This means we should not have an issue with multicollinearity. Also There is no violation of the assumption of independence. Each observation in the data set represents a unique client, and there is no indication of repeated measures or grouped sampling that would violate this condition. Therefore, it is reasonable to assume that all observations are independent of one another.</p>
+
+<h4 style="color:black;">Reduced Logistic Model</h4> 
+<p>The reduced model was created to simplify the initial logistic regression by retaining only the most influential predictors. Starting with a full model that included all demographic, financial, and campaign variables, backward stepwise selection based on AIC was applied to remove variables that contributed little to explaining subscription probability. This process resulted in a more parsimonious model that balances predictive accuracy with interpretability, highlighting the variables that have the strongest association with whether or not a client subscribes to the term deposit. </p>
+
+```{r rud, include=TRUE, echo=FALSE, warning=FALSE}
+# Reduced model via backward stepwise selection
+full.model <- initial.model
+reduced.model <- glm(y ~ poutcome, family = binomial, data = mydata)
+final.model <- step(full.model, 
+                    scope=list(lower=formula(reduced.model), upper=formula(full.model)),
+                    data = mydata, 
+                    direction = "backward",
+                    trace = 0)
+final.model.coef <- summary(final.model)$coef
+
+# Display final model coefficients
+kable(final.model.coef, caption = "Summary table of significant tests") %>%
+  kable_styling("striped", full_width = FALSE) %>%
+  row_spec(0, color = "white", background = "#222222") %>%
+  row_spec(1:nrow(final.model.coef), color = "white", background = "#333333")
+
+```
+
+<h4 style="color:black;">Association Analysis Interpretation</h4> <p>Clients with tertiary education, longer call duration, and those contacted in March or October are more likely to subscribe. For example each additional second of call duration, the odds of a client subscribing to a term deposit increase by about 0.42%, indicating that longer calls are associated with a slightly higher likelihood of subscription. Additionally individuals with a previously successful campaign outcome are also positively associated with subscription. Conversely, being married, having a housing or personal loan, using an unknown contact method, or being contacted repeatedly during the same campaign lowers subscription odds. Early-year contacts tend to have negative effects. Call duration and prior campaign success exhibit the strongest influence on subscription.</p> 
+
+<h4 style="color:black;">Recommendation</h4>
+<p>Campaigns should focus on high-education clients, prioritize those with prior positive responses, encourage longer calls, avoid over-contacting, and target months with historically higher success to improve subscription rates.</p>
+
+
+<h2 style="color:black;">Predictive Model</h2> <p>The predictive model uses logistic regression to estimate whether a client will subscribe to a term deposit using demographic, financial, and campaign variables.</p>
+
+```{r p, include=TRUE, echo=FALSE, warning=FALSE}
+# Predict subscription probability for new clients
+mynewdata <- data.frame(
+  marital   = c("single", "married"),
+  education = c("tertiary", "secondary"),
+  balance   = c(1200, 300),
+  housing   = c("no", "yes"),
+  loan      = c("no", "yes"),
+  contact   = c("cellular", "unknown"),
+  day       = c(15, 23),
+  month     = c("mar", "oct"),
+  duration  = c(250, 120),
+  campaign  = c(1, 4),
+  poutcome  = c("success", "failure")
+)
+
+pred.success.prob <- predict(final.model, newdata = mynewdata, type = "response")
+cut.off.prob <- 0.5
+pred.response <- ifelse(pred.success.prob > cut.off.prob, 1, 0)
+mynewdata$Predicted_Response <- pred.response
+
+# Display predictions neatly with white header
+kable(mynewdata, caption = "Predicted Probability and Response (cut-off = 0.5)") %>%
+  kable_styling(full_width = FALSE) %>%
+  row_spec(0, color = "white")
+
+```
+
+<p> The predictive model estimates whether a client will subscribe to a term deposit based on their characteristics. For the two hypothetical clients, it predicts that the single client with tertiary education and favorable campaign features will subscribe (1), while the married client with less favorable features will not (0). </p>
+
+<h3 style="color:black;">Summary</h3> <p>This analysis examined factors influencing whether a client subscribes to a term deposit. Logistic regression identified significant positive associations with tertiary education, longer call duration, contacts in March or October, and previously successful campaigns. Inversely, being married, having loans, unknown contact methods, repeated campaigns, and early-year contacts were negatively associated. A reduced model was built using backward selection to focus on the strongest predictors, ensuring model simplicity and interpretability. The predictive model demonstrates how new client features can estimate subscription probability, providing actionable insights for marketing strategies.</p> 
+
+<h2>Model Performance</h2>
+
+```{r q, include=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Final Reduced Model
+
+library(pROC)
+
+# Encode y
+good.id = which(mydata$y == "1") 
+bad.id  = which(mydata$y == "0")
+mydata$y = 1
+mydata$y[bad.id] = 0
+
+# Split into train/test
+set.seed(123)
+nn = nrow(mydata)
+train.id = sample(1:nn, round(nn * 0.7), replace = FALSE)
+trainDat = mydata[train.id, ]
+testDat  = mydata[-train.id, ]
+
+# Ensure all factor variables have consistent levels
+cat_vars <- c("month", "marital", "contact", "loan", "housing", "education", "poutcome")
+
+for (v in cat_vars) {
+  trainDat[[v]] <- factor(trainDat[[v]], levels = unique(mydata[[v]]))
+  testDat[[v]]  <- factor(testDat[[v]],  levels = unique(mydata[[v]]))
+}
+
+# Fit logistic regression model 
+logit.model = glm(y ~ poutcome + month + marital + contact + duration +
+                    campaign + day + loan + housing + education,
+                  family = binomial(link = "logit"),
+                  data = trainDat)
+
+# Predict probabilities on test data 
+newdata = data.frame(
+  poutcome = testDat$poutcome,
+  month    = testDat$month,
+  marital  = testDat$marital,
+  contact  = testDat$contact,
+  duration = testDat$duration,
+  campaign = testDat$campaign,
+  day      = testDat$day,
+  loan     = testDat$loan,
+  housing  = testDat$housing,
+  education = testDat$education
+)
+
+pred.prob.test = predict.glm(logit.model, newdata, type = "response")
+
+#  ROC and AUC 
+category = testDat$y == 1
+ROCobj <- roc(category, pred.prob.test)
+auc.value <- auc(ROCobj)
+cat("Test AUC =", round(auc.value, 4), "\n")
+
+# Sensitivity and specificity 
+sen = ROCobj$sensitivities
+spe = ROCobj$specificities
+
+# Find optimal cutoff (where sensitivity ≈ specificity)
+SenMinusSpe = abs(sen - spe)
+minID = which(SenMinusSpe == min(SenMinusSpe))
+cut.off.prob = ROCobj$thresholds[minID]
+cat("Optimal cutoff probability =", round(cut.off.prob, 4), "\n")
+
+# Plot ROC curve with optimal point 
+plot((1 - spe), sen, main = "Optimal ROC Point (Full Model)",
+     type = "l", ylab = "Sensitivity", xlab = "1 - Specificity", col = "#0072B2", lwd = 2)
+segments(0, 0, 1, 1, lty = 2, col = "red", lwd = 1.5)
+segments((1 - spe[minID]), 0, (1 - spe[minID]), sen[minID], col = "purple", lwd = 1.5)
+points((1 - spe[minID]), sen[minID], pch = 19, col = "gold", cex = 1.5)
+text(0.45, sen[minID], 
+     paste("(", round(spe[minID], 3), ",", round(sen[minID], 3), ")", sep = ""),
+     cex = 0.8, col = "blue")
+
+
+```
+
+
+<h3>Model Performance Summary</h3>
+
+  <p>
+Test AUC = 0.8757 
+The AUC (Area Under the ROC Curve) measures the model’s ability to distinguish between subscribers and non-subscribers. A value of 0.8757 means the model correctly ranks a random subscriber higher than a random non-subscriber about 87.6% of the time indicating strong predictive performance.
+  </p>
+  
+  <p>
+Optimal cutoff probability = 0.0936  
+This is the threshold used to classify a predicted probability into a “yes” or “no” response. Probabilities above 0.0936 are predicted as “yes” (the client will subscribe). This relatively low cutoff suggests that even small predicted probabilities are enough to favor the “yes” classification which may be appropriate if the goal is to identify as many potential subscribers as possible.</p>
+      
+  
+```{r t, include=TRUE, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Final Reduced Model
+
+library(pROC)
+
+# Encode y
+good.id = which(mydata$y == "1") 
+bad.id  = which(mydata$y == "0")
+mydata$y = 1
+mydata$y[bad.id] = 0
+
+# Split into train/test
+set.seed(123)
+nn = nrow(mydata)
+train.id = sample(1:nn, round(nn * 0.7), replace = FALSE)
+trainDat = mydata[train.id, ]
+testDat  = mydata[-train.id, ]
+
+# Ensure all factor variables have consistent levels
+cat_vars <- c("month", "marital", "contact", "loan", "housing", "education", "poutcome")
+
+for (v in cat_vars) {
+  trainDat[[v]] <- factor(trainDat[[v]], levels = unique(mydata[[v]]))
+  testDat[[v]]  <- factor(testDat[[v]],  levels = unique(mydata[[v]]))
+}
+
+# Fit logistic regression model 
+logit.model = glm(y ~ poutcome + month + marital + contact + duration +
+                    campaign + day + loan + housing + education,
+                  family = binomial(link = "logit"),
+                  data = trainDat)
+
+# Predict probabilities on test data 
+newdata = data.frame(
+  poutcome = testDat$poutcome,
+  month    = testDat$month,
+  marital  = testDat$marital,
+  contact  = testDat$contact,
+  duration = testDat$duration,
+  campaign = testDat$campaign,
+  day      = testDat$day,
+  loan     = testDat$loan,
+  housing  = testDat$housing,
+  education = testDat$education
+)
+
+pred.prob.test = predict.glm(logit.model, newdata, type = "response")
+
+# ROC and AUC 
+category = testDat$y == 1
+ROCobj <- roc(category, pred.prob.test)
+auc.value <- auc(ROCobj)
+cat("Test AUC =", round(auc.value, 4), "\n")
+
+# Sensitivity and specificity 
+sen = ROCobj$sensitivities
+spe = ROCobj$specificities
+
+# Find optimal cutoff (where sensitivity ≈ specificity)
+SenMinusSpe = abs(sen - spe)
+minID = which(SenMinusSpe == min(SenMinusSpe))
+cut.off.prob = ROCobj$thresholds[minID]
+cat("Optimal cutoff probability =", round(cut.off.prob, 4), "\n")
+
+# Plot ROC curve with optimal point 
+plot((1 - spe), sen, main = "Optimal ROC Point (Full Model)",
+     type = "l", ylab = "Sensitivity", xlab = "1 - Specificity", col = "#0072B2", lwd = 2)
+segments(0, 0, 1, 1, lty = 2, col = "red", lwd = 1.5)
+segments((1 - spe[minID]), 0, (1 - spe[minID]), sen[minID], col = "purple", lwd = 1.5)
+points((1 - spe[minID]), sen[minID], pch = 19, col = "gold", cex = 1.5)
+text(0.45, sen[minID], 
+     paste("(", round(spe[minID], 3), ",", round(sen[minID], 3), ")", sep = ""),
+     cex = 0.8, col = "blue")
+
+
+
+
+# Model for final reduced model to be compared too 
+
+library(pROC)
+
+# Encode y
+good.id = which(mydata$y == "1") 
+bad.id = which(mydata$y == "0")
+mydata$y = 1
+mydata$y[bad.id] = 0
+
+# Split into train/test
+#nn = dim(mydata)[1]
+#train.id = sample(1:nn, round(nn*0.7), replace = FALSE) 
+#trainDat = mydata[train.id,]
+#testDat = mydata[-train.id,]
+
+# Ensure factor variables have all levels
+trainDat$month   <- factor(trainDat$month, levels = unique(mydata$month))
+testDat$month    <- factor(testDat$month,  levels = unique(mydata$month))
+trainDat$marital <- factor(trainDat$marital, levels = unique(mydata$marital))
+testDat$marital  <- factor(testDat$marital,  levels = unique(mydata$marital))
+trainDat$contact <- factor(trainDat$contact, levels = unique(mydata$contact))
+testDat$contact  <- factor(testDat$contact,  levels = unique(mydata$contact))
+
+AUC.vec = rep(0,5)
+color = c("#002642","#840032","#432534", "#c44900", "#0b7a75")
+fold.size = floor(nrow(trainDat) / 5)
+
+for(i in 1:5){
+  ID = ((i-1)*fold.size + 1):(i*fold.size)
+  valid = as.data.frame(trainDat[ID,])
+  train = as.data.frame(trainDat[-ID,])
+  
+  # Ensure factor levels in the fold
+  train$month   <- factor(train$month, levels = levels(mydata$month))
+  valid$month   <- factor(valid$month, levels = levels(mydata$month))
+  train$marital <- factor(train$marital, levels = levels(mydata$marital))
+  valid$marital <- factor(valid$marital, levels = levels(mydata$marital))
+  train$contact <- factor(train$contact, levels = levels(mydata$contact))
+  valid$contact <- factor(valid$contact, levels = levels(mydata$contact))
+  
+  # Logistic regression with all predictors
+  logit.model = glm(y ~ poutcome + month + marital + contact + duration, 
+                    family = binomial(link = "logit"), 
+                    data = train)
+  
+  newdata = data.frame(poutcome = valid$poutcome,
+                       month = valid$month,
+                       marital = valid$marital,
+                       contact = valid$contact,
+                       duration = valid$duration)
+  
+  pred.prob.train = predict.glm(logit.model, newdata, type = "response")
+  
+  prediction = pred.prob.train
+  category = valid$y == 1
+  ROCobj <- roc(category, prediction)
+  AUC.vec[i] = round(auc(ROCobj), 4)
+  
+  if(i==1){
+    plot((1-ROCobj$specificities), ROCobj$sensitivities,
+         type="l",
+         main="5-fold Cross-validated ROC",
+         col=color[i], 
+         xlab="1-specificity",
+         ylab="sensitivity",
+         lwd=1, 
+         lty=1)
+    segments(0,0,1,1, lty=2, col="red")
+  } else{
+    lines((1-ROCobj$specificities), ROCobj$sensitivities, col=color[i], lwd=1)
+  }
+}
+
+summary(AUC.vec)
+
+# Final model on entire training data
+trainDat$month   <- factor(trainDat$month, levels = levels(mydata$month))
+testDat$month    <- factor(testDat$month,  levels = levels(mydata$month))
+trainDat$marital <- factor(trainDat$marital, levels = levels(mydata$marital))
+testDat$marital  <- factor(testDat$marital,  levels = levels(mydata$marital))
+trainDat$contact <- factor(trainDat$contact, levels = levels(mydata$contact))
+testDat$contact  <- factor(testDat$contact,  levels = levels(mydata$contact))
+
+logit.model = glm(y ~ poutcome + month + marital + contact + duration, 
+                  family = binomial(link = "logit"), 
+                  data = trainDat)
+
+newdata = data.frame(poutcome = testDat$poutcome,
+                     month = testDat$month,
+                     marital = testDat$marital,
+                     contact = testDat$contact,
+                     duration = testDat$duration)
+
+pred.prob.train = predict.glm(logit.model, newdata, type = "response")
+prediction = pred.prob.train
+category = testDat$y == 1
+ROCobj <- roc(category, prediction)
+testAUC = round(auc(ROCobj), 4)
+c(testAUC = testAUC)
+
+  
+
+
+# ROC 
+
+library(pROC)
+
+# Encode response
+# Assuming y is already 1/0
+# mydata$y <- 1 for "good" and 0 for "bad" if needed
+
+# Split into train/test
+#nn = nrow(mydata)
+#train.id = sample(1:nn, round(nn*0.7), replace = FALSE) 
+#trainDat = mydata[train.id,]
+#testDat = mydata[-train.id,]
+
+# Ensure factor variables have all levels
+trainDat$month   <- factor(trainDat$month, levels = unique(mydata$month))
+testDat$month    <- factor(testDat$month,  levels = unique(mydata$month))
+trainDat$marital <- factor(trainDat$marital, levels = unique(mydata$marital))
+testDat$marital  <- factor(testDat$marital,  levels = unique(mydata$marital))
+trainDat$contact <- factor(trainDat$contact, levels = unique(mydata$contact))
+testDat$contact  <- factor(testDat$contact,  levels = unique(mydata$contact))
+
+# Fit logistic regression model
+logit.model = glm(y ~ poutcome + month + marital + contact + duration, 
+                  family = binomial(link = "logit"), 
+                  data = trainDat)
+
+# Predict probabilities on test data
+newdata = data.frame(poutcome = testDat$poutcome,
+                     month = testDat$month,
+                     marital = testDat$marital,
+                     contact = testDat$contact,
+                     duration = testDat$duration)
+
+pred.prob.test = predict.glm(logit.model, newdata, type = "response")
+
+# Calculate ROC and AUC
+category = testDat$y == 1
+ROCobj <- roc(category, pred.prob.test)
+auc.value <- auc(ROCobj)
+cat("Test AUC =", round(auc.value, 4), "\n")
+
+# Sensitivity and specificity
+sen = ROCobj$sensitivities
+spe = ROCobj$specificities
+
+# Find optimal cutoff (closest to sen = spe)
+SenMinusSpe = abs(sen - spe)
+minID = which(SenMinusSpe == min(SenMinusSpe))
+cut.off.prob = ROCobj$thresholds[minID]
+cat("Optimal cutoff probability =", round(cut.off.prob, 4), "\n")
+
+# Plot ROC curve and highlight optimal point
+plot((1-spe), sen, main = "Optimal ROC Point",
+     type = "l",
+     ylab = "Sensitivity",
+     xlab = "1 - Specificity")
+segments(0, 0, 1, 1, lty = 2, col = "red", lwd = 2)
+segments((1-spe[minID]), 0, (1-spe[minID]), sen[minID], col="purple", lwd=1.5)
+points((1-spe[minID]), sen[minID], pch=19, col = "darkred", cex = 1.7)
+points((1-spe[minID]), sen[minID], pch=19, col = "gold", cex = 1.2)
+text(0.4, sen[minID], paste("(", round(spe[minID],5), ", ", round(sen[minID],5), ")"),
+     cex = 0.8, col = "blue")
+
+
+```
+
+<h3>Model Comparison Based on AUC</h3>
+
+<p>
+Two candidate logistic regression models were evaluated using the Area Under the ROC Curve (AUC) to measure their predictive accuracy. The first model achieved an AUC of 0.8757, while the second model achieved an AUC of 0.8696.
+</p>
+
+<p>
+Although the difference in AUC values appears small, the higher AUC indicates that the first model has a slightly better ability to discriminate between clients who subscribe and those who do not. In practical terms, the first model more accurately ranks clients by their likelihood of subscribing to a term deposit, leading to better targeting and fewer misclassifications.
+</p>
+
+<p>
+The improvement in AUC suggests that the first model captures more relevant relationships between the predictors and the response variable. Therefore, it is considered the better-performing model and should be used for prediction and interpretation.
+</p>
+
+<h2>Overall Report Summary</h2>
+
+<p>
+The purpose of this analysis was to develop and evaluate a logistic regression model to predict whether a client would subscribe to a term deposit based on demographic and campaign-related variables.
+Several candidate models were tested using different combinations of predictors, including campaign, day, loan, housing, and education.
+Model selection was guided by the AIC to identify the most parsimonious model that achieved strong predictive performance.
+</p>
+
+<p>
+After comparing the candidate models, the final selected model had the lowest AIC, indicating the best balance between model fit and complexity. This model was further assessed using the ROC curve and the AUC metric to evaluate its classification accuracy.
+</p>
+
+<p>
+The final model achieved an AUC of 0.8757, which indicates excellent discriminatory ability between clients who subscribed and those who did not. The optimal cutoff probability of 0.0936 was identified, balancing sensitivity and specificity effectively. In comparison, an alternative model with an AUC of 0.8696 showed slightly weaker performance, confirming the superiority of the final model.
+</p>
+
+<p>
+Interpretation of the model coefficients revealed that factors such as education level, loan status, and housing had meaningful effects on the likelihood of subscribing to a term deposit. Clients with no housing or personal loans and higher education levels were more likely to subscribe. Campaign-related factors, such as the number of contacts and the day of contact, also contributed to predicting customer responses.
+</p>
+
+<p>
+In conclusion, the selected logistic regression model provides a reliable and interpretable tool for predicting client subscription behavior. Its high AUC value and low AIC confirm that it balances predictive accuracy with simplicity, making it the preferred model for practical implementation and future decision-making.
+</p>
+
