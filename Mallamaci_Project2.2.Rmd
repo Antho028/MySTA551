@@ -1,0 +1,610 @@
+---
+title: "Comparative Analysis of Predictive Models for Heart Disease Classification"
+author: "Anthony Mallamaci"
+date: "2025-10-14"
+output:
+  html_document: 
+    toc: yes
+    toc_float: yes
+    toc_depth: 4
+    fig_width: 6
+    fig_height: 4
+    fig_caption: yes
+    number_sections: yes
+    toc_collapsed: yes
+    code_folding: hide
+    code_download: yes
+    smooth_scroll: yes
+    theme: lumen
+  word_document: 
+    toc: yes
+    toc_depth: 4
+    fig_caption: yes
+    keep_md: yes
+  pdf_document: 
+    toc: yes
+    toc_depth: 4
+    fig_caption: yes
+    number_sections: yes
+    fig_width: 5
+    fig_height: 4
+---
+
+```{=html}
+<style type="text/css">
+
+div#TOC li {
+    list-style:none;
+    background-image:none;
+    background-repeat:none;
+    background-position:0;
+}
+
+h1.title {
+  font-size: 20px;
+  font-weight: bold;
+  color: DarkRed;
+  text-align: center;
+}
+h4.author { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+    font-weight: bold;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkRed;
+  text-align: center;
+}
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-weight: bold;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+h1 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 22px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: center;
+}
+h2 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 18px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h3 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 16px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h4 { /* Header 4 - and the author and data headers use this too  */
+    font-size: 14px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: left;
+}
+</style>
+```
+```{r setup, include=FALSE}
+# code chunk specifies whether the R code, warnings, and output 
+# will be included in the output files.
+if (!require("ggplot2")) {
+   install.packages("ggplot2")
+   library(ggplot2)
+}
+if (!require("knitr")) {
+   install.packages("knitr")
+   library(knitr)
+}
+if (!require("ISLR")) {
+   install.packages("ISLR")
+   library(ISLR)
+}
+if (!require("neuralnet")) {
+   install.packages("neuralnet")
+   library(neuralnet)
+}
+if (!require("caret")) {
+   install.packages("caret")
+   library(caret)
+}
+if (!require("nnet")) {
+   install.packages("nnet")
+   library(nnet)
+}
+if (!require("haven")) {
+   install.packages("haven")
+   library(haven)
+}
+if (!require("pander")) {
+   install.packages("pander")
+   library(pander)
+}
+if (!require("pROC")) {
+   install.packages("pROC")
+   library(pROC)
+}
+if (!require("gridExtra")) {
+   install.packages("gridExtra")
+   library(gridExtra)
+}
+if (!require("ggparallel")) {
+   install.packages("ggparallel")
+   library(ggparallel)
+}
+# The following R source code will be use to plot the path plot
+# of neural network model with estimated weights from the data.
+#source("")
+# knitr::opts_knit$set(root.dir = "C:\\STA551\\w08")
+
+knitr::opts_chunk$set(echo = TRUE,       
+                      warning = FALSE,   
+                      results = TRUE,   
+                      message = FALSE,
+                      comment= NA)
+```
+
+<h1 style="color:black;">Introduction</h1>
+
+The objective of this analysis is to evaluate and compare the predictive performance of different classification approaches for identifying individuals at risk of heart disease. Using a real-world medical dataset with a binary outcome (presence or absence of heart disease), I fit both a logistic regression model and a single-layer neural network (perceptron). By generating ROC curves and comparing model AUC values, I aim to determine whether a more flexible neural-network-based approach offers meaningful performance gains over a classical logistic model in this context. This comparison provides insight into model choice considerations for clinical prediction tasks, balancing interpretability and predictive accuracy.
+
+<h2 style="color:black;">EDA</h1>
+
+This section explores the dataset through summary statistics and visualizations to understand key variable distributions and identify potential patterns related to heart disease.
+
+```{r }
+url <- "https://raw.githubusercontent.com/Antho028/MySTA551/refs/heads/main/heart_disease_dataset.csv"
+mydata <- read.csv(url)
+head(mydata)
+summary(mydata)
+
+```
+
+```{r}
+# pairwise scatterplot 
+NumVar <- mydata[, c(1,4,5,8,10,16)]
+
+# Improved pairwise scatterplot
+pairs(
+  NumVar,
+  pch = 16,                    # solid circles
+  cex = 0.5,                   # smaller point size
+  col = rgb(0, 0, 0.5, 0.05),  # navy with very high transparency
+  main = "Pairwise Scatter Plot of Numerical Variables"
+)
+cols <- ifelse(mydata$heart_disease == 1, rgb(1, 0, 0, 0.3), rgb(0, 0, 0.5, 0.3))
+pairs(NumVar, pch = 16, cex = 0.6, col = cols,
+      main = "Pairwise Scatter Plot Colored by Heart Disease Status")
+
+```
+
+```{r}
+# Visualize the data 
+# Identify numeric and categorical variables
+num_vars <- c("age", "trestbps", "chol", "thalach", "oldpeak", "bmi")
+cat_vars <- c("sex", "cp", "fbs", "restecg", "exang", 
+              "slope", "ca", "thal", "smoking", "diabetes", "heart_disease")
+
+# Set up plotting area
+par(mfrow = c(3, 3))  # adjust grid size depending on number of variables
+
+# --- Plot numeric variable distributions ---
+for (v in num_vars) {
+  hist(mydata[[v]],
+       main = paste("Distribution of", v),
+       xlab = v,
+       col = "steelblue",
+       border = "white")
+}
+
+# Reset plotting area to start categorical plots
+par(mfrow = c(3, 4))
+
+# --- Plot categorical variable distributions ---
+for (v in cat_vars) {
+  tbl <- table(mydata[[v]])
+  barplot(tbl,
+          main = paste("Distribution of", v),
+          col = "steelblue",
+          border = "white",
+          ylab = "Count")
+}
+
+
+```
+
+The above plots show that many numerical predictors (such as age, cholesterol, resting blood pressure, and maximum heart rate) have broad, roughly uniform distributions, with no obvious linear separations between patients with and without heart disease. Pairwise scatterplots colored by disease status reveal heavy overlap between the two groups, suggesting that simple threshold-based rules are unlikely to separate classes effectively. Categorical predictors such as chest pain type, exercise-induced angina, and number of major vessels show clear imbalances in their distributions, which may influence model fit and variable importance.
+
+
+<h1 style="color:black;">Model Building</h1>
+
+After completing the exploratory analysis, I proceed to construct predictive models to classify heart disease risk based on patient features. My approach includes fitting both logistic regression and a single-layer neural network (perceptron) to evaluate differences in model performance and predictive capability. By comparing these methods using ROC analysis and AUC metrics, I assess which model provides more accurate and reliable predictions for this binary clinical outcome.
+
+
+<h2 style="color:black;">Logistic Model Building</h2>
+
+To model the probability of heart disease, I fitted several logistic regression models and compared their predictive performance. I began with a reduced model containing only a practically relevant predictor (resting blood pressure, trestbps). I then built a full logistic model that included all clinically meaningful predictors—age, sex, chest pain type, cholesterol, ECG results, exercise-induced angina, and others—to capture a broader set of potential risk factors. To objectively determine the most efficient subset of predictors, I applied forward stepwise selection, starting from the reduced model and allowing statistically significant variables to enter the model.
+
+After estimating the reduced, full, and forward-selected models, I generated predicted probabilities for each and evaluated performance using ROC curves and AUC values. This allowed a direct comparison of sensitivity–specificity trade-offs across the three models. The forward-selected model ultimately provided the best balance of parsimony and prediction accuracy, making it the preferred logistic regression model for this dataset.
+
+```{r}
+url <- "https://raw.githubusercontent.com/Antho028/MySTA551/refs/heads/main/heart_disease_dataset.csv"
+mydata <- read.csv(url)
+set.seed(120)
+# The following reduced model includes practically significant predictor variables
+reducedModel = glm(heart_disease ~ trestbps,
+                   family = binomial(link = logit),
+                   data = mydata)
+# Adding some potential statistically significant variables
+fullModel = glm(heart_disease ~ age + sex + cp + trestbps + chol + fbs + restecg +
+                   thalach + exang + oldpeak + slope + ca + thal + smoking +
+                   diabetes + bmi,
+                family = binomial(link = "logit"),
+                data = mydata)
+## Automatics variable selection procedure for searching for the best model
+## for association analysis
+forwards = step(reducedModel,
+                scope=list(lower=formula(reducedModel),upper=formula(fullModel)), 
+                direction="forward",
+                trace = FALSE)
+
+
+## predict the "success" probabilities of each model based on the entire data set
+preReduced = predict(reducedModel, newdata = mydata,type="response" )
+predfullModel = predict(fullModel, newdata = mydata,type="response" ) 
+predforwards = predict(forwards, newdata = mydata,type="response" ) 
+##
+prediction.reduced = preReduced
+prediction.full = predfullModel
+prediction.forwards = predforwards 
+  category = mydata$heart_disease == 1
+  ROCobj.reduced <- roc(category, prediction.reduced)
+  ROCobj.full <- roc(category, prediction.full)
+  ROCobj.forwards <- roc(category, prediction.forwards)
+## AUC
+  reducedAUC = ROCobj.reduced$auc
+  fullAUC = ROCobj.full$auc
+  forwardsAUC = ROCobj.forwards$auc
+## extract sensitivity and specificity from candidate models
+  sen.reduced = ROCobj.reduced$sensitivities
+  fnr.reduced = 1 - ROCobj.reduced$specificities
+  #
+  sen.full = ROCobj.full$sensitivities
+  fnr.full = 1 - ROCobj.full$specificities
+  #
+  sen.forwards = ROCobj.forwards$sensitivities
+  fnr.forwards = 1 - ROCobj.forwards$specificities
+## Fond contrast color for ROC curves
+  colors = c("#8B4500", "#00008B", "#8B008B")
+## Plotting ROC curves
+#par(type="s")
+plot(fnr.reduced, sen.reduced, type = "l", lwd = 2, col = colors[1],
+     xlim = c(0,1),
+     ylim = c(0,1),
+     xlab = "1 - specificity",
+     ylab = "sensitivity",
+     main = "ROC Curves of Candidate Models")
+lines(fnr.full, sen.full, lwd = 2, lty = 2, col = colors[2])
+lines(fnr.forwards, sen.forwards, lwd = 1, col = colors[3])
+segments(0,0,1,1, lwd =1, col = "red", lty = 2)
+legend("topleft", c("reduced", "full", "forwards", "random guess"), 
+       col=c(colors, "red"), lwd=c(2,2,1,1),
+       lty=c(1,2,1,2), bty = "n", cex = 0.7)
+## annotating AUC
+text(0.87, 0.25, paste("AUC.reduced = ", round(reducedAUC,4)), col=colors[1], cex = 0.7, adj = 1)
+text(0.87, 0.20, paste("AUC.full = ", round(fullAUC,4)), col=colors[2], cex = 0.7, adj = 1)
+text(0.87, 0.15, paste("AUC.forwards = ", round(forwardsAUC,4)), col=colors[3], cex = 0.7, adj = 1)
+
+summary(forwards)
+
+```
+
+The logistic regression analysis evaluated three candidate models—reduced, full, and forward-selected—using ROC curves and AUC values to assess predictive performance. The reduced model performed poorly (AUC ≈ 0.50), indicating no meaningful predictive power beyond random guessing. The full model improved substantially (AUC ≈ 0.673), suggesting that incorporating a broad set of clinical and demographic predictors helps distinguish patients with and without heart disease. However, the forward stepwise model achieved nearly the same performance (AUC ≈ 0.670) with far fewer predictors, indicating a more efficient and parsimonious representation of the data.
+
+The forward-selected model ultimately retained only age and trestbps. Age emerged as a highly significant predictor (p < 0.001), demonstrating that the likelihood of heart disease increases with age. Although trestbps was not statistically significant on its own, it remained in the model because stepwise selection optimizes AIC rather than p-values. Even a small improvement in overall model likelihood was sufficient for AIC to retain trestbps, highlighting the difference between inferential significance and model-selection criteria.
+
+
+<h2 style="color:black;">Neural Network Model Building</h2>
+
+To explore a more flexible nonlinear classifier, I built a feed-forward neural network to predict the probability of heart disease using the same set of predictors as in the full logistic regression model. Continuous variables (age, trestbps, chol, thalach, oldpeak, and BMI) were first min–max scaled to the [0,1] range, while categorical predictors (sex, chest pain type, ECG results, etc.) were converted to dummy variables via a design matrix. Using these processed inputs, I specified a neural-network formula with heart_disease as the output and all predictors as inputs, then trained a network with one hidden node and a logistic activation function, appropriate for binary outcomes. This model learns nonlinear combinations of the predictors and provides estimated probabilities of heart disease that can be directly compared to those from logistic regression.
+
+```{r}
+# Select variables used in the full logistic model
+fullModelNames <- c("age","sex","cp","trestbps","chol","fbs","restecg",
+                    "thalach","exang","oldpeak","slope","ca","thal",
+                    "smoking","diabetes","bmi","heart_disease")
+
+neuralData <- mydata[, fullModelNames]
+
+# Scale numeric features using min-max
+neuralData$age_scale      = (neuralData$age - min(neuralData$age)) / (max(neuralData$age) - min(neuralData$age))
+neuralData$trestbps_scale = (neuralData$trestbps - min(neuralData$trestbps)) / (max(neuralData$trestbps) - min(neuralData$trestbps))
+neuralData$chol_scale     = (neuralData$chol - min(neuralData$chol)) / (max(neuralData$chol) - min(neuralData$chol))
+neuralData$thalach_scale  = (neuralData$thalach - min(neuralData$thalach)) / (max(neuralData$thalach) - min(neuralData$thalach))
+neuralData$oldpeak_scale  = (neuralData$oldpeak - min(neuralData$oldpeak)) / (max(neuralData$oldpeak) - min(neuralData$oldpeak))
+neuralData$bmi_scale      = (neuralData$bmi - min(neuralData$bmi)) / (max(neuralData$bmi) - min(neuralData$bmi))
+
+# Drop original features — keep only scaled ones + categorical + response
+ANNModelNames <- c("sex","cp","fbs","restecg","exang","slope","ca","thal",
+                   "smoking","diabetes",
+                   "age_scale","trestbps_scale","chol_scale","thalach_scale",
+                   "oldpeak_scale","bmi_scale",
+                   "heart_disease")
+
+neuralDataFinal <- neuralData[, ANNModelNames]
+
+
+
+
+# Create dummy variables and design matrix
+implicitFormula <- model.matrix(~., data = neuralDataFinal)
+implicitFormulaDesignMatrix <- model.matrix(~., data = neuralDataFinal)
+
+# Build formula using column names
+columnNames <- colnames(implicitFormulaDesignMatrix)
+columnList <- paste(columnNames[-c(1,length(columnNames))], collapse = "+")
+columnList <- paste(c(columnNames[length(columnNames)], "~", columnList), collapse = "")
+modelFormula <- formula(columnList)
+
+modelFormula
+
+
+
+
+
+library(neuralnet)
+
+NetworkModel <- neuralnet(modelFormula,
+                          data = implicitFormulaDesignMatrix,
+                          hidden = 1,
+                          act.fct = "logistic",
+                          linear.output = FALSE)
+
+NetworkModel$result.matrix
+
+
+plot(NetworkModel, rep="best")
+
+
+```
+
+
+The neural network successfully learned non-linear relationships between clinical variables and heart-disease outcomes. Variables such as cholesterol, maximum heart rate, and ST-depression level (oldpeak) showed strong influence in the hidden layer, indicating they play key roles in class separation. The model converged quickly and produced reasonable predictive accuracy, confirming that even a single-layer perceptron can capture meaningful medical-risk patterns. The NN model complements logistic regression by identifying more complex interactions that may not be captured by linear models.
+
+<h2 style="color:black;">Neural Network Vs. Logistic Model Building using ROC </h2>
+
+For model comparison, I evaluated the forward–selected logistic regression and the neural network on the same heart-disease dataset using ROC analysis. Using the fitted logistic model, I predicted heart‐disease probabilities for all subjects and computed a ROC curve and AUC. I then fed the same inputs (the dummy-coded design matrix without the intercept) into the trained neural network and obtained its predicted probabilities, and constructed a second ROC curve and AUC. Plotting both curves on the same graph allowed me to directly compare their discrimination performance, with the legend reporting each model’s AUC to quantify which classifier better separates patients with and without heart disease.
+
+```{r}
+# NueroNetwork Vs. Logisitc 
+# Ensure neuralnet::compute is used
+library(neuralnet)
+library(pROC)
+
+# Remove intercept column from design matrix
+Xinput <- implicitFormulaDesignMatrix[, -1]
+
+# ---- Logistic ROC ----
+log.pred <- predict(forwards, newdata = mydata, type="response")
+log.roc <- roc(mydata$heart_disease, log.pred)
+
+# ---- Neural Network ROC ----
+nn.pred.raw <- neuralnet::compute(NetworkModel, Xinput)$net.result
+nn.pred <- as.vector(nn.pred.raw)
+nn.roc <- roc(mydata$heart_disease, nn.pred)
+
+# ---- Plot ROC ----
+plot(log.roc, col="blue", lwd=2,
+     main="ROC Comparison: Logistic Regression vs Neural Network",
+     xlab="1 - Specificity", ylab="Sensitivity")
+
+plot(nn.roc, col="red", lwd=2, add=TRUE)
+abline(0,1,lty=2)
+
+legend("bottomright",
+       legend=c(
+         paste("Logistic AUC =", round(log.roc$auc,3)),
+         paste("Neural Net AUC =", round(nn.roc$auc,3))
+       ),
+       col=c("blue","red"), lwd=2)
+
+
+
+
+```
+
+
+The ROC comparison between the logistic regression model and the neural network model shows that both approaches perform similarly, with AUC values of 0.67 for logistic regression and 0.664 for the neural network. This indicates that both models have moderate ability to distinguish between patients with and without heart disease. The logistic regression model slightly outperformed the neural network, suggesting that in this dataset, a traditional and interpretable statistical method provides comparable — and slightly better — predictive power than the more flexible neural network. This result highlights that when datasets are structured, not extremely large, and relationships may be relatively linear, logistic regression can remain a strong baseline model without sacrificing performance while retaining interpretability.
+
+
+<h2 style="color:black;">Decision Tree</h2>
+
+To further explore predictive performance beyond the earlier logistic and neural network models, a decision tree classifier was developed. This model type was selected for its intuitive interpretability and ability to capture nonlinear relationships without requiring feature transformations. Multiple tree configurations were evaluated to identify the optimal balance between model complexity and accuracy.
+
+```{r}
+#HW project 2 part 2
+
+### PACKAGES
+library(neuralnet)
+library(pROC)
+library(rpart)
+library(rpart.plot)
+library(ROCR)
+### LOAD DATA
+url <- "https://raw.githubusercontent.com/Antho028/MySTA551/refs/heads/main/heart_disease_dataset.csv"
+mydata <- read.csv(url)
+
+### Convert outcome to factor
+mydata$heart_disease <- factor(mydata$heart_disease, levels=c(0,1), labels=c("neg","pos"))
+
+### TRAIN/TEST SPLIT (70/30)
+set.seed(120)
+n <- nrow(mydata)
+train.id <- sample(1:n, round(0.7*n))
+train <- mydata[train.id, ]
+test  <- mydata[-train.id, ]
+
+
+###############################################################
+### PREPARE DATA FOR NEURAL NET & PERCEPTRON
+###############################################################
+
+# Copy train/test sets
+train.nn <- train
+test.nn  <- test
+
+# Convert heart_disease to numeric (0/1) for neural network
+train.nn$heart_disease <- ifelse(train.nn$heart_disease == "pos", 1, 0)
+test.nn$heart_disease  <- ifelse(test.nn$heart_disease == "pos", 1, 0)
+
+# Scale numeric columns
+scaleVars <- c("age","trestbps","chol","thalach","oldpeak","bmi")
+train.nn[scaleVars] <- scale(train.nn[scaleVars])
+test.nn[scaleVars]  <- scale(test.nn[scaleVars], 
+                             center = attr(scale(train.nn[scaleVars]), "scaled:center"), 
+                             scale  = attr(scale(train.nn[scaleVars]), "scaled:scale"))
+
+# Define formula for neural network
+formula.nn <- as.formula("heart_disease ~ age + sex + cp + trestbps + chol + fbs + restecg +
+                           thalach + exang + oldpeak + slope + ca + thal + smoking + diabetes + bmi")
+
+
+###############################################################
+### Perceptron (Single-layer model, no hidden nodes)
+###############################################################
+
+# Reuse neural net numeric dataset
+ set.seed(120)
+
+# Use the same scaled data used for NN
+train.p <- train.nn
+test.p  <- test.nn
+
+# Build perceptron (hidden = 0)
+perc <- neuralnet(formula.nn, data = train.p, hidden = 0, linear.output = FALSE)
+
+# Names of predictor variables in the model (everything on RHS of formula.nn)
+xvars <- all.vars(formula.nn)[-1]
+
+# Predictions from perceptron on the test set
+perc.pred <- neuralnet::compute(perc, test.p[, xvars])$net.result
+perc.pred <- as.vector(perc.pred)
+
+# ROC & AUC
+perc.ROC <- roc(test.p$heart_disease, perc.pred)
+perc.AUC <- auc(perc.ROC)
+cat("AUC – Perceptron:", perc.AUC, "\n")
+
+
+# NueroNetwork Vs. Logisitc 
+# Ensure neuralnet::compute is used
+library(neuralnet)
+library(pROC)
+
+# Remove intercept column from design matrix
+Xinput <- implicitFormulaDesignMatrix[, -1]
+
+# ---- Logistic ROC ----
+log.pred <- predict(forwards, newdata = mydata, type="response")
+log.roc <- roc(mydata$heart_disease, log.pred)
+
+# ---- Neural Network ROC ----
+nn.pred.raw <- neuralnet::compute(NetworkModel, Xinput)$net.result
+nn.pred <- as.vector(nn.pred.raw)
+nn.roc <- roc(mydata$heart_disease, nn.pred)
+
+
+
+
+
+###############################################################
+### 3) DECISION TREES — multiple configs
+###############################################################
+tree.build <- function(in.data, fp, fn, splitmethod){
+  rpart(heart_disease ~ ., data=in.data, method="class",
+        parms=list(loss=matrix(c(0,fp,fn,0),2,2,byrow=TRUE), split=splitmethod),
+        control=rpart.control(minsplit=10, cp=0.01, xval=10))
+}
+
+### Train 6 trees
+gini.1.1   <- tree.build(train, 1,1,"gini")
+info.1.1   <- tree.build(train, 1,1,"information")
+gini.1.10  <- tree.build(train, 1,10,"gini")
+info.1.10  <- tree.build(train, 1,10,"information")
+gini.10.1  <- tree.build(train,10,1,"gini")
+info.10.1  <- tree.build(train,10,1,"information")
+
+### Compute AUC for all trees
+tree.models <- list(
+  gini.1.1=gini.1.1,
+  info.1.1=info.1.1,
+  gini.1.10=gini.1.10,
+  info.1.10=info.1.10,
+  gini.10.1=gini.10.1,
+  info.10.1=info.10.1
+)
+
+tree.results <- data.frame(Model=character(), AUC=numeric())
+
+for(name in names(tree.models)){
+  m <- tree.models[[name]]
+  pred <- predict(m, newdata=test, type="prob")[, "pos"]
+  auc.val <- auc(roc(test$heart_disease, pred))
+  tree.results <- rbind(tree.results, data.frame(Model=name, AUC=round(auc.val,3)))
+}
+
+print(tree.results)
+
+### Select best tree
+best.tree.name <- tree.results$Model[which.max(tree.results$AUC)]
+best.tree <- tree.models[[best.tree.name]]
+cat("Best tree model:", best.tree.name, "\n")
+
+### Best tree predictions
+tree.pred <- predict(best.tree, newdata=test, type="prob")[, "pos"]
+tree.ROC <- roc(test$heart_disease, tree.pred)
+cat("AUC – Best Tree:", auc(tree.ROC), "\n")
+
+###############################################################
+### 4) PLOT ROC CURVES — Logistic vs Neural Net vs Best Tree
+###############################################################
+plot(log.roc, col="blue", lwd=2, main="ROC Comparison: Logistic vs NN vs Best Tree")
+plot(nn.roc, col="red", lwd=2, add=TRUE)
+plot(perc.ROC, col="green", lwd=2, add=TRUE)
+plot(tree.ROC, col="black", lwd=2, add=TRUE)
+abline(0,1,lty=2)
+
+legend("bottomright",
+       legend=c(
+         paste("Logistic AUC =", round(log.roc$auc,3)),
+         paste("Neural Net AUC =", round(nn.roc$auc,3)),
+         paste("Perceptron AUC =", round(auc(perc.ROC),3)),
+         paste("Best Tree:", best.tree.name, ", AUC =", round(auc(tree.ROC),3))
+       ),
+       col=c("blue","red","green","black"), lwd=2)
+
+
+
+
+
+
+```
+
+
+This ROC comparison shows that all models perform better than random, but none are outstanding. The forward‐selected logistic regression has the highest AUC (~0.67), only slightly better than the single–hidden-node neural network (AUC ≈ 0.663), while the best decision tree (info.1.1, AUC ≈ 0.646) and the perceptron (AUC ≈ 0.558) lag behind. Overall, the simple logistic model provides the best discrimination between patients with and without heart disease, and the more flexible models (NN, tree) do not deliver a meaningful improvement in predictive accuracy for this dataset.
+
+
+
+<h1 style="color:black;">Conclusion</h1>
+
+Across all models evaluated, logistic regression achieved the strongest overall predictive performance, yielding the highest AUC (0.67). The neural network provided similar results (AUC = 0.663), offering no meaningful improvement despite its increased flexibility. The perceptron performed notably worse (AUC = 0.558), indicating that a single-layer linear classifier was insufficient to capture the underlying relationships in the data. The best decision tree model showed moderate performance (AUC = 0.646) but still did not surpass logistic regression.
+
+Overall, the results suggest that for this heart disease dataset, the classical logistic regression model remains the most reliable choice, balancing interpretability and predictive accuracy without the added complexity of neural networks or tree-based models.
+
